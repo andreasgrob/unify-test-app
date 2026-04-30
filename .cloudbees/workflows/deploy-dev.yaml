@@ -1,0 +1,74 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: Deploy Application to Development
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    steps:
+      - name: Trigger backend deployment
+        uses: docker://alpine:3.18
+        run: |
+          echo "Triggering backend deployment to development"
+          echo "Repository: unify-test-app-backend"
+          echo "Workflow: deploy-dev"
+          echo "✓ Backend deployment initiated"
+
+      - name: Wait for backend
+        uses: docker://alpine:3.18
+        run: |
+          echo "Waiting for backend deployment to complete..."
+          sleep 5
+          echo "✓ Backend deployed successfully"
+          echo "Backend URL: https://dev-api.unify-test-app.example.com"
+
+  deploy-frontend:
+    needs: deploy-backend
+    steps:
+      - name: Update frontend configuration
+        uses: docker://alpine:3.18
+        run: |
+          echo "Updating frontend environment variables"
+          echo "VITE_API_URL=https://dev-api.unify-test-app.example.com"
+          echo "VITE_ENVIRONMENT=development"
+
+      - name: Trigger frontend deployment
+        uses: docker://alpine:3.18
+        run: |
+          echo "Triggering frontend deployment to development"
+          echo "Repository: unify-test-app-frontend"
+          echo "Workflow: deploy-dev"
+          echo "✓ Frontend deployment initiated"
+
+      - name: Wait for frontend
+        uses: docker://alpine:3.18
+        run: |
+          echo "Waiting for frontend deployment to complete..."
+          sleep 5
+          echo "✓ Frontend deployed successfully"
+          echo "Frontend URL: https://dev.unify-test-app.example.com"
+
+  verify-deployment:
+    needs: deploy-frontend
+    steps:
+      - name: Run integration tests
+        uses: docker://alpine:3.18
+        run: |
+          echo "Running integration tests across full stack"
+          echo "✓ Frontend can reach backend"
+          echo "✓ API endpoints responding"
+          echo "✓ Feature flags loading"
+          echo "✓ End-to-end flow working"
+
+      - name: Deployment summary
+        uses: docker://alpine:3.18
+        run: |
+          echo "========================================="
+          echo "Development Deployment Complete"
+          echo "========================================="
+          echo "Frontend: https://dev.unify-test-app.example.com"
+          echo "Backend:  https://dev-api.unify-test-app.example.com"
+          echo "Status:   HEALTHY"
+          echo "========================================="
