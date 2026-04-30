@@ -1,379 +1,286 @@
 apiVersion: automation.cloudbees.io/v1alpha1
-kind: workflow
+kind: staged-workflow
 name: Staged Deployment Pipeline
 
 on:
   workflow_dispatch:
 
-jobs:
-  # ============================================
-  # STAGE 1: DEVELOPMENT
-  # ============================================
-  deploy-dev-backend:
-    steps:
-      - name: Deploy backend to development
-        uses: docker://alpine:3.18
-        run: |
-          echo "========================================="
-          echo "STAGE 1: DEVELOPMENT DEPLOYMENT"
-          echo "========================================="
-          echo "Deploying backend to development..."
-          echo "Repository: unify-test-app-backend"
-          echo "✓ Backend deployment initiated"
-          sleep 5
-          echo "✓ Backend deployed to dev"
-          echo "Backend URL: https://dev-api.unify-test-app.example.com"
+stages:
+  - name: Development
+    jobs:
+      deploy-backend:
+        steps:
+          - name: Deploy backend to development
+            uses: docker://alpine:3.18
+            run: |
+              echo "========================================="
+              echo "STAGE: DEVELOPMENT"
+              echo "========================================="
+              echo "Deploying backend to development..."
+              sleep 5
+              echo "✓ Backend deployed"
+              echo "URL: https://dev-api.unify-test-app.example.com"
 
-  deploy-dev-frontend:
-    needs: deploy-dev-backend
-    steps:
-      - name: Deploy frontend to development
-        uses: docker://alpine:3.18
-        run: |
-          echo "Deploying frontend to development..."
-          echo "Repository: unify-test-app-frontend"
-          echo "✓ Frontend deployment initiated"
-          sleep 5
-          echo "✓ Frontend deployed to dev"
-          echo "Frontend URL: https://dev.unify-test-app.example.com"
+      deploy-frontend:
+        needs: deploy-backend
+        steps:
+          - name: Deploy frontend to development
+            uses: docker://alpine:3.18
+            run: |
+              echo "Deploying frontend to development..."
+              sleep 5
+              echo "✓ Frontend deployed"
+              echo "URL: https://dev.unify-test-app.example.com"
 
-  verify-dev:
-    needs: deploy-dev-frontend
-    steps:
-      - name: Run integration tests
-        uses: docker://alpine:3.18
-        run: |
-          echo "Running integration tests on development"
-          echo "✓ Frontend-Backend connectivity verified"
-          echo "✓ API endpoints responding"
-          echo "✓ Feature flags loading"
-          echo "✓ All integration tests passed"
+      verify:
+        needs: deploy-frontend
+        steps:
+          - name: Run integration tests
+            uses: docker://alpine:3.18
+            run: |
+              echo "Running integration tests..."
+              echo "✓ Frontend-Backend connectivity verified"
+              echo "✓ API endpoints responding"
+              echo "✓ Feature flags loading"
+              echo "✓ All integration tests passed"
 
-      - name: Dev deployment summary
-        uses: docker://alpine:3.18
-        run: |
-          echo "========================================="
-          echo "✓ DEVELOPMENT DEPLOYMENT COMPLETE"
-          echo "========================================="
-          echo "Status: HEALTHY"
-          echo "Ready to proceed to staging"
-          echo ""
+          - name: Summary
+            uses: docker://alpine:3.18
+            run: |
+              echo "✓ Development deployment complete"
+              echo "Status: HEALTHY"
 
-  # ============================================
-  # APPROVAL GATE: DEV → STAGING
-  # ============================================
-  approval-staging:
-    needs: verify-dev
-    steps:
-      - name: Request staging deployment approval
-        uses: docker://alpine:3.18
-        run: |
-          echo "========================================="
-          echo "APPROVAL REQUIRED: Deploy to Staging?"
-          echo "========================================="
-          echo "Development deployment successful"
-          echo "All tests passing"
-          echo ""
-          echo "Waiting for approval to proceed to staging..."
-          echo "(In production, this would pause for manual approval)"
-          sleep 3
-          echo "✓ Approval granted - proceeding to staging"
+  - name: Staging
+    jobs:
+      pre-checks:
+        steps:
+          - name: Pre-deployment checks
+            uses: docker://alpine:3.18
+            run: |
+              echo "========================================="
+              echo "STAGE: STAGING"
+              echo "========================================="
+              echo "Running pre-deployment checks..."
+              echo "✓ Development verified"
+              echo "✓ Security scans passed"
 
-  # ============================================
-  # STAGE 2: STAGING
-  # ============================================
-  staging-pre-checks:
-    needs: approval-staging
-    steps:
-      - name: Pre-deployment checks
-        uses: docker://alpine:3.18
-        run: |
-          echo "========================================="
-          echo "STAGE 2: STAGING DEPLOYMENT"
-          echo "========================================="
-          echo "Running pre-deployment checks..."
-          echo "✓ Development health verified"
-          echo "✓ Security scans passed"
+          - name: Backup
+            uses: docker://alpine:3.18
+            run: |
+              echo "Creating backups..."
+              echo "✓ Database backup created"
 
-      - name: Backup staging
-        uses: docker://alpine:3.18
-        run: |
-          echo "Creating staging backups..."
-          echo "✓ Database backup created"
-          echo "✓ Configuration backed up"
+      deploy-backend:
+        needs: pre-checks
+        steps:
+          - name: Deploy backend to staging
+            uses: docker://alpine:3.18
+            run: |
+              echo "Deploying backend to staging..."
+              sleep 8
+              echo "✓ Backend deployed"
+              echo "URL: https://staging-api.unify-test-app.example.com"
 
-  deploy-staging-backend:
-    needs: staging-pre-checks
-    steps:
-      - name: Deploy backend to staging
-        uses: docker://alpine:3.18
-        run: |
-          echo "Deploying backend to staging..."
-          echo "Repository: unify-test-app-backend"
-          sleep 8
-          echo "✓ Backend deployed to staging"
-          echo "Backend URL: https://staging-api.unify-test-app.example.com"
+          - name: Smoke tests
+            uses: docker://alpine:3.18
+            run: |
+              echo "Running smoke tests..."
+              echo "✓ Health endpoint responding"
+              echo "✓ API functional"
 
-      - name: Backend smoke tests
-        uses: docker://alpine:3.18
-        run: |
-          echo "Running backend smoke tests..."
-          echo "✓ Health endpoint responding"
-          echo "✓ Database connectivity verified"
-          echo "✓ API endpoints functional"
+      deploy-frontend:
+        needs: deploy-backend
+        steps:
+          - name: Deploy frontend to staging
+            uses: docker://alpine:3.18
+            run: |
+              echo "Deploying frontend to staging..."
+              sleep 8
+              echo "✓ Frontend deployed"
+              echo "URL: https://staging.unify-test-app.example.com"
 
-  deploy-staging-frontend:
-    needs: deploy-staging-backend
-    steps:
-      - name: Deploy frontend to staging
-        uses: docker://alpine:3.18
-        run: |
-          echo "Deploying frontend to staging..."
-          echo "Repository: unify-test-app-frontend"
-          sleep 8
-          echo "✓ Frontend deployed to staging"
-          echo "Frontend URL: https://staging.unify-test-app.example.com"
+          - name: Smoke tests
+            uses: docker://alpine:3.18
+            run: |
+              echo "Running smoke tests..."
+              echo "✓ Application loads correctly"
+              echo "✓ Assets served properly"
 
-      - name: Frontend smoke tests
-        uses: docker://alpine:3.18
-        run: |
-          echo "Running frontend smoke tests..."
-          echo "✓ Application loads correctly"
-          echo "✓ Assets served properly"
-          echo "✓ Backend connectivity verified"
+      verify:
+        needs: deploy-frontend
+        steps:
+          - name: E2E tests
+            uses: docker://alpine:3.18
+            run: |
+              echo "Running E2E test suite..."
+              echo "✓ User login flow"
+              echo "✓ Task management"
+              echo "✓ All E2E tests passed"
 
-  verify-staging:
-    needs: deploy-staging-frontend
-    steps:
-      - name: Run E2E test suite
-        uses: docker://alpine:3.18
-        run: |
-          echo "Running end-to-end test suite..."
-          echo "✓ User login flow"
-          echo "✓ Task creation and management"
-          echo "✓ Feature flag integration"
-          echo "✓ Navigation flows"
-          echo "All E2E tests passed"
+          - name: Performance tests
+            uses: docker://alpine:3.18
+            run: |
+              echo "Running performance tests..."
+              echo "✓ API response: avg 45ms"
+              echo "✓ Frontend load: 1.3s"
+              echo "✓ Lighthouse: 95"
 
-      - name: Performance testing
-        uses: docker://alpine:3.18
-        run: |
-          echo "Running performance tests..."
-          echo "✓ API response time: avg 45ms"
-          echo "✓ Frontend load time: 1.3s"
-          echo "✓ Lighthouse score: 95"
+          - name: Summary
+            uses: docker://alpine:3.18
+            run: |
+              echo "✓ Staging deployment complete"
+              echo "Status: HEALTHY"
 
-      - name: Staging deployment summary
-        uses: docker://alpine:3.18
-        run: |
-          echo "========================================="
-          echo "✓ STAGING DEPLOYMENT COMPLETE"
-          echo "========================================="
-          echo "Status: HEALTHY"
-          echo "All tests passing"
-          echo "Ready for production deployment"
-          echo ""
+  - name: Production
+    jobs:
+      pre-checks:
+        steps:
+          - name: Final checks
+            uses: docker://alpine:3.18
+            run: |
+              echo "========================================="
+              echo "STAGE: PRODUCTION"
+              echo "========================================="
+              echo "Running final checks..."
+              echo "✓ Staging verified"
+              echo "✓ Compliance met"
+              echo "✓ Security passed"
 
-  # ============================================
-  # APPROVAL GATE: STAGING → PRODUCTION
-  # ============================================
-  approval-production:
-    needs: verify-staging
-    steps:
-      - name: Request production deployment approval
-        uses: docker://alpine:3.18
-        run: |
-          echo "========================================="
-          echo "APPROVAL REQUIRED: Deploy to Production?"
-          echo "========================================="
-          echo "Staging deployment successful"
-          echo "All tests and validations passed"
-          echo ""
-          echo "⚠️  This will deploy to PRODUCTION"
-          echo ""
-          echo "Waiting for approval..."
-          echo "(In production, this would pause for manual approval)"
-          sleep 5
-          echo "✓ Production deployment approved - proceeding"
+          - name: Backup
+            uses: docker://alpine:3.18
+            run: |
+              echo "Creating production backups..."
+              echo "✓ Database backup created"
+              echo "✓ Configuration backed up"
 
-  # ============================================
-  # STAGE 3: PRODUCTION
-  # ============================================
-  production-pre-checks:
-    needs: approval-production
-    steps:
-      - name: Final pre-deployment checks
-        uses: docker://alpine:3.18
-        run: |
-          echo "========================================="
-          echo "STAGE 3: PRODUCTION DEPLOYMENT"
-          echo "========================================="
-          echo "Running final pre-deployment checks..."
-          echo "✓ Staging health verified"
-          echo "✓ Compliance requirements met"
-          echo "✓ Security audit passed"
+          - name: Rollback prep
+            uses: docker://alpine:3.18
+            run: |
+              echo "Preparing rollback..."
+              echo "✓ Rollback scripts ready"
+              echo "✓ Previous version tagged"
 
-      - name: Create production backups
-        uses: docker://alpine:3.18
-        run: |
-          echo "Creating production backups..."
-          echo "✓ Database backup created"
-          echo "✓ Configuration backup created"
-          echo "✓ Static assets backup created"
+      deploy-backend:
+        needs: pre-checks
+        steps:
+          - name: Deploy backend (Blue-Green)
+            uses: docker://alpine:3.18
+            run: |
+              echo "Deploying backend to production..."
+              echo "Strategy: Blue-Green"
+              echo "Regions: us-east-1, us-west-2, eu-west-1"
+              sleep 12
+              echo "✓ Green deployed"
+              echo "✓ Health checks passed"
+              echo "✓ Traffic switched"
+              echo "URL: https://api.unify-test-app.example.com"
 
-      - name: Prepare rollback
-        uses: docker://alpine:3.18
-        run: |
-          echo "Preparing rollback procedures..."
-          echo "✓ Rollback scripts validated"
-          echo "✓ Previous version tagged"
+          - name: Verify health
+            uses: docker://alpine:3.18
+            run: |
+              echo "Verifying backend health..."
+              echo "✓ US-East-1: HEALTHY"
+              echo "✓ US-West-2: HEALTHY"
+              echo "✓ EU-West-1: HEALTHY"
 
-  deploy-production-backend:
-    needs: production-pre-checks
-    steps:
-      - name: Deploy backend to production (Blue-Green)
-        uses: docker://alpine:3.18
-        run: |
-          echo "Deploying backend to production..."
-          echo "Strategy: Blue-Green Deployment"
-          echo "Regions: us-east-1, us-west-2, eu-west-1"
-          sleep 12
-          echo "✓ Green environment deployed"
-          echo "✓ Health checks passing"
-          echo "✓ Traffic switched to green"
-          echo "Backend URL: https://api.unify-test-app.example.com"
+      deploy-frontend:
+        needs: deploy-backend
+        steps:
+          - name: Deploy frontend (Canary)
+            uses: docker://alpine:3.18
+            run: |
+              echo "Deploying frontend to production..."
+              echo "Strategy: Canary"
+              echo ""
+              echo "Phase 1: 10% traffic"
+              sleep 4
+              echo "✓ Canary healthy at 10%"
+              echo ""
+              echo "Phase 2: 25% traffic"
+              sleep 4
+              echo "✓ Stable at 25%"
+              echo ""
+              echo "Phase 3: 50% traffic"
+              sleep 4
+              echo "✓ Good at 50%"
+              echo ""
+              echo "Phase 4: 100% traffic"
+              sleep 4
+              echo "✓ Full rollout successful"
+              echo "URL: https://unify-test-app.example.com"
 
-      - name: Verify backend health (all regions)
-        uses: docker://alpine:3.18
-        run: |
-          echo "Verifying backend health across all regions..."
-          echo "✓ US-East-1: HEALTHY"
-          echo "✓ US-West-2: HEALTHY"
-          echo "✓ EU-West-1: HEALTHY"
-          echo "✓ Error rate: 0.01%"
-          echo "✓ Response time: avg 42ms"
+          - name: Invalidate CDN
+            uses: docker://alpine:3.18
+            run: |
+              echo "Invalidating CDN..."
+              echo "✓ All edge locations updated"
 
-  deploy-production-frontend:
-    needs: deploy-production-backend
-    steps:
-      - name: Deploy frontend to production (Canary)
-        uses: docker://alpine:3.18
-        run: |
-          echo "Deploying frontend to production..."
-          echo "Strategy: Canary Deployment"
-          echo ""
-          echo "Phase 1: 10% traffic"
-          sleep 4
-          echo "✓ Canary healthy at 10%"
-          echo ""
-          echo "Phase 2: 25% traffic"
-          sleep 4
-          echo "✓ Metrics stable at 25%"
-          echo ""
-          echo "Phase 3: 50% traffic"
-          sleep 4
-          echo "✓ Performance good at 50%"
-          echo ""
-          echo "Phase 4: 100% traffic"
-          sleep 4
-          echo "✓ Full rollout successful"
-          echo "Frontend URL: https://unify-test-app.example.com"
+      verify:
+        needs: deploy-frontend
+        steps:
+          - name: Smoke tests
+            uses: docker://alpine:3.18
+            run: |
+              echo "Running production smoke tests..."
+              echo "✓ Homepage accessible"
+              echo "✓ Authentication working"
+              echo "✓ API connectivity verified"
+              echo "✓ Feature flags synced"
 
-      - name: Invalidate global CDN
-        uses: docker://alpine:3.18
-        run: |
-          echo "Invalidating production CDN cache..."
-          echo "✓ CloudFront invalidation complete"
-          echo "✓ All edge locations updated"
+          - name: Monitor metrics
+            uses: docker://alpine:3.18
+            run: |
+              echo "Monitoring production..."
+              echo "✓ Error rate: 0.01%"
+              echo "✓ API response: avg 40ms"
+              echo "✓ Frontend load: avg 1.1s"
 
-  verify-production:
-    needs: deploy-production-frontend
-    steps:
-      - name: Run production smoke tests
-        uses: docker://alpine:3.18
-        run: |
-          echo "Running production smoke tests..."
-          echo "✓ Homepage accessible"
-          echo "✓ User authentication working"
-          echo "✓ API connectivity verified"
-          echo "✓ Feature flags synchronized"
-          echo "✓ Critical paths functional"
+          - name: Verify SLOs
+            uses: docker://alpine:3.18
+            run: |
+              echo "Verifying SLOs..."
+              echo "✓ Availability: 99.99%"
+              echo "✓ Latency p95: <100ms"
+              echo "✓ Error budget: OK"
 
-      - name: Monitor production metrics
-        uses: docker://alpine:3.18
-        run: |
-          echo "Monitoring production metrics..."
-          echo "✓ Error rate: 0.01%"
-          echo "✓ API response time: avg 40ms"
-          echo "✓ Frontend load time: avg 1.1s"
-          echo "✓ User engagement: stable"
+      complete:
+        needs: verify
+        steps:
+          - name: Post-deployment
+            uses: docker://alpine:3.18
+            run: |
+              echo "Post-deployment tasks..."
+              echo "✓ Alerts updated"
+              echo "✓ Release notes published"
+              echo "✓ Team notified"
 
-      - name: Verify SLOs
-        uses: docker://alpine:3.18
-        run: |
-          echo "Verifying Service Level Objectives..."
-          echo "✓ Availability: 99.99%"
-          echo "✓ Latency p95: < 100ms"
-          echo "✓ Error budget: within limits"
-
-  # ============================================
-  # FINAL SUMMARY
-  # ============================================
-  deployment-complete:
-    needs: verify-production
-    steps:
-      - name: Post-deployment tasks
-        uses: docker://alpine:3.18
-        run: |
-          echo "Running post-deployment tasks..."
-          echo "✓ Monitoring alerts updated"
-          echo "✓ Release notes published"
-          echo "✓ Change log updated"
-          echo "✓ On-call team notified"
-
-      - name: Final deployment summary
-        uses: docker://alpine:3.18
-        run: |
-          echo ""
-          echo "========================================="
-          echo "🎉 STAGED DEPLOYMENT COMPLETE 🎉"
-          echo "========================================="
-          echo ""
-          echo "DEVELOPMENT"
-          echo "  Frontend: https://dev.unify-test-app.example.com"
-          echo "  Backend:  https://dev-api.unify-test-app.example.com"
-          echo "  Status:   ✓ HEALTHY"
-          echo ""
-          echo "STAGING"
-          echo "  Frontend: https://staging.unify-test-app.example.com"
-          echo "  Backend:  https://staging-api.unify-test-app.example.com"
-          echo "  Status:   ✓ HEALTHY"
-          echo ""
-          echo "PRODUCTION"
-          echo "  Frontend: https://unify-test-app.example.com"
-          echo "  Backend:  https://api.unify-test-app.example.com"
-          echo "  Status:   ✓ HEALTHY"
-          echo ""
-          echo "Deployment Strategy:"
-          echo "  Backend:   Blue-Green"
-          echo "  Frontend:  Canary (10→25→50→100%)"
-          echo ""
-          echo "Total Deployment Time: ~5 minutes"
-          echo "Downtime: 0 seconds"
-          echo "Regions: 3 (US-East, US-West, EU-West)"
-          echo ""
-          echo "✓ All environments healthy"
-          echo "✓ All tests passing"
-          echo "✓ Zero customer impact"
-          echo "========================================="
-
-      - name: Notify stakeholders
-        uses: docker://alpine:3.18
-        run: |
-          echo "Sending deployment notifications..."
-          echo "✓ Engineering team notified"
-          echo "✓ Product team notified"
-          echo "✓ Customer success notified"
-          echo "✓ Status page updated"
-          echo ""
-          echo "Staged deployment pipeline completed successfully!"
+          - name: Final summary
+            uses: docker://alpine:3.18
+            run: |
+              echo ""
+              echo "========================================="
+              echo "🎉 STAGED DEPLOYMENT COMPLETE"
+              echo "========================================="
+              echo ""
+              echo "DEVELOPMENT"
+              echo "  Frontend: https://dev.unify-test-app.example.com"
+              echo "  Backend:  https://dev-api.unify-test-app.example.com"
+              echo "  Status:   ✓ HEALTHY"
+              echo ""
+              echo "STAGING"
+              echo "  Frontend: https://staging.unify-test-app.example.com"
+              echo "  Backend:  https://staging-api.unify-test-app.example.com"
+              echo "  Status:   ✓ HEALTHY"
+              echo ""
+              echo "PRODUCTION"
+              echo "  Frontend: https://unify-test-app.example.com"
+              echo "  Backend:  https://api.unify-test-app.example.com"
+              echo "  Status:   ✓ HEALTHY"
+              echo ""
+              echo "Strategy: Blue-Green (backend) + Canary (frontend)"
+              echo "Downtime: 0 seconds"
+              echo "Regions: 3"
+              echo ""
+              echo "✓ All environments healthy"
+              echo "✓ All tests passing"
+              echo "========================================="
